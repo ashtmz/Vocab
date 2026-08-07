@@ -508,7 +508,7 @@
 const MODE_NAMES = { flashcard: "フラッシュカード", quiz: "4択クイズ", typing: "タイピング" };
 const LANG_FLAGS = { en: "🇺🇸", es: "🇪🇸", fr: "🇫🇷", de: "🇩🇪", it: "🇮🇹" };
 const SESSION_SIZE = 10; // 既定値。個人設定で変更可能
-const NEW_WORDS_PER_DAY = 10;
+const RECOMMENDED_NEW_PER_DAY = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STORAGE_KEY = "vocabAppStats";
 const CARD_STORAGE_KEY = "vocabAppCards";
@@ -675,11 +675,11 @@ function renderStudyPlan() {
   const cards = currentPool().map(([word]) => currentProgress(word, savedCards)).filter(Boolean);
   const due = cards.filter(c => c.dueAt <= now).length;
   const weak = cards.filter(c => c.lapses >= 2).length;
-  const newLeft = Math.max(0, NEW_WORDS_PER_DAY - reviewedNewWordsToday(selectedLang));
+  const newLeft = Math.max(0, RECOMMENDED_NEW_PER_DAY - reviewedNewWordsToday(selectedLang));
   const goal = getSessionSize();
   el.innerHTML = due
-    ? `<div class="plan-main">今日の復習：${due}語</div><div class="plan-sub">1回${goal}語。復習語を優先し、新規はあと${newLeft}語まで。</div>`
-    : `<div class="plan-main">復習待ちの単語はありません</div><div class="plan-sub">1回${goal}語。今日は新規を${newLeft}語まで学べます${weak ? ` ・ 苦手語 ${weak}語` : ""}</div>`;
+    ? `<div class="plan-main">今日の復習：${due}語</div><div class="plan-sub">1回${goal}語。復習語を優先します（新規の目安：あと${newLeft}語）。</div>`
+    : `<div class="plan-main">復習待ちの単語はありません</div><div class="plan-sub">1回${goal}語。未習語から続けて学べます${weak ? ` ・ 苦手語 ${weak}語` : ""}</div>`;
 }
 function saveResult(lang, correct, total) {
   const stats = loadStats();
@@ -813,11 +813,13 @@ function selectSessionWords() {
     .sort((a, b) => a.progress.dueAt - b.progress.dueAt);
 
   const selected = due.slice(0, sessionSize);
-  const newSlots = Math.max(0, NEW_WORDS_PER_DAY - reviewedNewWordsToday(selectedLang));
+  // 新規語の「1日10語」は目安として表示するだけで、出題を止めない。
+  // 未習語が残っている限り、レベルを変えてもその範囲から新しい語を選ぶ。
   const personalNew = newWords.filter(item => item.isCustom);
-  selected.push(...personalNew.slice(0, Math.min(sessionSize - selected.length, newSlots)));
-  const remainingNewSlots = Math.max(0, Math.min(sessionSize - selected.length, newSlots - selected.filter(item => item.isCustom).length));
-  selected.push(...newWords.filter(item => !item.isCustom).slice(0, remainingNewSlots));
+  let remainingSlots = Math.max(0, sessionSize - selected.length);
+  selected.push(...personalNew.slice(0, remainingSlots));
+  remainingSlots = Math.max(0, sessionSize - selected.length);
+  selected.push(...newWords.filter(item => !item.isCustom).slice(0, remainingSlots));
   // 復習も新規も残っていないときは、次に期限が来る語を自主練習として出す。
   selected.push(...upcoming.slice(0, sessionSize - selected.length));
   return shuffle(selected).map(item => ({ ...item, isRetry: false, retryCount: 0 }));
