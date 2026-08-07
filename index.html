@@ -320,6 +320,23 @@
   .study-plan { text-align: center; }
   .study-plan .plan-main { font-size: 1.05rem; font-weight: 800; color: #c4b5fd; }
   .study-plan .plan-sub { margin-top: 7px; color: var(--sub); font-size: 0.82rem; line-height: 1.6; }
+  .personal-panel h2 { margin-bottom: 10px; }
+  .personal-note { color: var(--sub); font-size: 0.82rem; line-height: 1.6; margin-bottom: 12px; }
+  .personal-form { display: grid; gap: 8px; }
+  .personal-form input, .personal-form select {
+    width: 100%; min-height: 44px; padding: 10px 12px;
+    border: 1px solid var(--line); border-radius: 12px;
+    background: rgba(255,255,255,0.06); color: var(--text); font: inherit;
+  }
+  .personal-form input:focus, .personal-form select:focus { outline: none; border-color: var(--accent); }
+  .personal-form select option { background: #171b28; color: var(--text); }
+  .custom-list { display: grid; gap: 7px; margin-top: 12px; }
+  .custom-item { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255,255,255,0.035); }
+  .custom-item .custom-text { flex: 1; min-width: 0; text-align: left; font-size: 0.86rem; line-height: 1.45; }
+  .custom-item .custom-text small { display: block; color: var(--sub); }
+  .custom-item button { min-height: 34px; padding: 5px 9px; font-size: 0.76rem; }
+  .speak-btn { min-height: 38px; padding: 8px 14px; font-size: 0.84rem; }
+  .word-example { color: #67e8f9; font-size: 0.88rem; line-height: 1.55; max-height: 80px; overflow-y: auto; }
 
   .back-link {
     display: inline-flex; align-items: center; gap: 4px;
@@ -367,6 +384,24 @@
       <h2>Today's plan / 今日の学習</h2>
       <div id="studyPlan"></div>
     </div>
+    <div class="panel personal-panel" style="margin-top: 16px;">
+      <h2>My study / 自分専用</h2>
+      <div class="personal-note">自分が実際に使う単語を登録すると、通常の復習スケジュールに優先的に組み込まれます。</div>
+      <div class="personal-form">
+        <select id="dailyGoalSelect" aria-label="1回の学習語数">
+          <option value="5">1回 5語（短時間）</option>
+          <option value="10" selected>1回 10語（標準）</option>
+          <option value="15">1回 15語</option>
+          <option value="20">1回 20語</option>
+        </select>
+        <select id="customLangSelect" aria-label="登録する言語"></select>
+        <input id="customWordInput" type="text" placeholder="単語・フレーズ（例: take a break）" autocomplete="off">
+        <input id="customMeaningInput" type="text" placeholder="意味（例: 休憩する）" autocomplete="off">
+        <input id="customExampleInput" type="text" placeholder="例文（任意）" autocomplete="off">
+        <button id="addCustomWordBtn" class="primary">自分の単語を追加</button>
+      </div>
+      <div id="customWordsList" class="custom-list"></div>
+    </div>
     <div class="panel" style="margin-top: 16px;">
       <h2>Stats / 学習記録</h2>
       <table class="stats-table" id="statsTable"></table>
@@ -384,6 +419,9 @@
       <span id="progressLabel"></span>
       <span id="scoreLabel"></span>
     </div>
+    <div class="controls" style="margin-top: -4px; margin-bottom: 12px;">
+      <button id="speakBtn" class="speak-btn">🔊 発音を聞く</button>
+    </div>
 
     <!-- フラッシュカード -->
     <div id="flashcardView" class="hidden">
@@ -398,6 +436,7 @@
             </div>
             <div class="card-face back">
               <div class="meaning" id="cardMeaning"></div>
+              <div class="word-example hidden" id="cardExample"></div>
               <div class="hint">スワイプ、またはボタンで判定</div>
             </div>
           </div>
@@ -468,11 +507,14 @@
 
 const MODE_NAMES = { flashcard: "フラッシュカード", quiz: "4択クイズ", typing: "タイピング" };
 const LANG_FLAGS = { en: "🇺🇸", es: "🇪🇸", fr: "🇫🇷", de: "🇩🇪", it: "🇮🇹" };
-const SESSION_SIZE = 10; // 1回の学習で出題する単語数
+const SESSION_SIZE = 10; // 既定値。個人設定で変更可能
 const NEW_WORDS_PER_DAY = 10;
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STORAGE_KEY = "vocabAppStats";
 const CARD_STORAGE_KEY = "vocabAppCards";
+const CUSTOM_WORDS_KEY = "vocabAppCustomWords";
+const PROFILE_KEY = "vocabAppProfile";
+const LANG_SPEECH = { en: "en-US", es: "es-ES", fr: "fr-FR", de: "de-DE", it: "it-IT" };
 // 頻度順のレベル区分(start以上end未満のインデックス)
 const LEVELS = [
   { name: "初級", start: 0, end: 1000 },
@@ -490,7 +532,69 @@ let session = { words: [], index: 0, correct: 0, attempted: 0, initialTotal: 0, 
 // 選択中の言語・レベルに応じた出題範囲を返す
 function currentPool() {
   const { start, end } = LEVELS[selectedLevel];
-  return WORDS[selectedLang].list.slice(start, end);
+  const base = WORDS[selectedLang].list.slice(start, end);
+  const custom = loadCustomWords()[selectedLang] || [];
+  return base.concat(custom.map(item => [item.word, item.meaning, item.example || "", true]));
+}
+
+function loadProfile() {
+  try { return { dailyGoal: SESSION_SIZE, ...JSON.parse(localStorage.getItem(PROFILE_KEY)) }; }
+  catch { return { dailyGoal: SESSION_SIZE }; }
+}
+function saveProfile(profile) {
+  localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
+}
+function getSessionSize() {
+  const goal = Number(loadProfile().dailyGoal);
+  return [5, 10, 15, 20].includes(goal) ? goal : SESSION_SIZE;
+}
+function loadCustomWords() {
+  try {
+    const data = JSON.parse(localStorage.getItem(CUSTOM_WORDS_KEY));
+    return data && typeof data === "object" ? data : {};
+  } catch { return {}; }
+}
+function saveCustomWords(words) {
+  localStorage.setItem(CUSTOM_WORDS_KEY, JSON.stringify(words));
+}
+function escapeHTML(value) {
+  return String(value).replace(/[&<>"']/g, char => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]));
+}
+function renderCustomWords() {
+  const lang = document.getElementById("customLangSelect").value || selectedLang;
+  const list = document.getElementById("customWordsList");
+  const words = loadCustomWords()[lang] || [];
+  list.innerHTML = words.length
+    ? words.map((item, index) => `<div class="custom-item"><div class="custom-text"><strong>${escapeHTML(item.word)}</strong><small>${escapeHTML(item.meaning)}${item.example ? ` · ${escapeHTML(item.example)}` : ""}</small></div><button data-custom-index="${index}">削除</button></div>`).join("")
+    : `<div class="personal-note" style="margin:0;">まだ自分の単語はありません</div>`;
+  list.querySelectorAll("[data-custom-index]").forEach(btn => btn.addEventListener("click", () => {
+    const data = loadCustomWords();
+    data[lang].splice(Number(btn.dataset.customIndex), 1);
+    if (!data[lang].length) delete data[lang];
+    saveCustomWords(data);
+    renderCustomWords();
+    renderStudyPlan();
+  }));
+}
+function addCustomWord() {
+  const lang = document.getElementById("customLangSelect").value;
+  const word = document.getElementById("customWordInput").value.trim();
+  const meaning = document.getElementById("customMeaningInput").value.trim();
+  const example = document.getElementById("customExampleInput").value.trim();
+  if (!word || !meaning) { alert("単語と意味を入力してください。"); return; }
+  const data = loadCustomWords();
+  const list = data[lang] || [];
+  if (list.some(item => item.word.normalize("NFC").toLowerCase() === word.normalize("NFC").toLowerCase())) {
+    alert("その単語はすでに登録されています。"); return;
+  }
+  list.unshift({ word, meaning, example, createdAt: Date.now() });
+  data[lang] = list;
+  saveCustomWords(data);
+  document.getElementById("customWordInput").value = "";
+  document.getElementById("customMeaningInput").value = "";
+  document.getElementById("customExampleInput").value = "";
+  renderCustomWords();
+  renderStudyPlan();
 }
 
 // ===== 文字数に応じたフォントサイズ調整(省略表示を防ぐ)=====
@@ -572,9 +676,10 @@ function renderStudyPlan() {
   const due = cards.filter(c => c.dueAt <= now).length;
   const weak = cards.filter(c => c.lapses >= 2).length;
   const newLeft = Math.max(0, NEW_WORDS_PER_DAY - reviewedNewWordsToday(selectedLang));
+  const goal = getSessionSize();
   el.innerHTML = due
-    ? `<div class="plan-main">今日の復習：${due}語</div><div class="plan-sub">復習語を優先して出題します。新規はあと${newLeft}語まで。</div>`
-    : `<div class="plan-main">復習待ちの単語はありません</div><div class="plan-sub">今日は新規を${newLeft}語まで学べます${weak ? ` ・ 苦手語 ${weak}語` : ""}</div>`;
+    ? `<div class="plan-main">今日の復習：${due}語</div><div class="plan-sub">1回${goal}語。復習語を優先し、新規はあと${newLeft}語まで。</div>`
+    : `<div class="plan-main">復習待ちの単語はありません</div><div class="plan-sub">1回${goal}語。今日は新規を${newLeft}語まで学べます${weak ? ` ・ 苦手語 ${weak}語` : ""}</div>`;
 }
 function saveResult(lang, correct, total) {
   const stats = loadStats();
@@ -627,11 +732,29 @@ for (const key of Object.keys(WORDS)) {
   btn.addEventListener("click", () => {
     selectedLang = key;
     langButtonsEl.querySelectorAll("button").forEach(b => b.classList.toggle("selected", b === btn));
+    document.getElementById("customLangSelect").value = key;
     updateStartBtn();
     renderStudyPlan();
+    renderCustomWords();
   });
   langButtonsEl.appendChild(btn);
 }
+const customLangSelect = document.getElementById("customLangSelect");
+for (const key of Object.keys(WORDS)) {
+  const option = document.createElement("option");
+  option.value = key;
+  option.textContent = `${LANG_FLAGS[key] || "🌐"} ${WORDS[key].name}`;
+  customLangSelect.appendChild(option);
+}
+customLangSelect.addEventListener("change", renderCustomWords);
+document.getElementById("addCustomWordBtn").addEventListener("click", addCustomWord);
+const dailyGoalSelect = document.getElementById("dailyGoalSelect");
+dailyGoalSelect.value = String(getSessionSize());
+dailyGoalSelect.addEventListener("change", () => {
+  saveProfile({ ...loadProfile(), dailyGoal: Number(dailyGoalSelect.value) });
+  renderStudyPlan();
+});
+renderCustomWords();
 document.querySelectorAll("[data-mode]").forEach(btn => {
   btn.addEventListener("click", () => {
     selectedMode = btn.dataset.mode;
@@ -678,8 +801,9 @@ function goHome() {
 // ===== セッション管理 =====
 function selectSessionWords() {
   const now = Date.now();
+  const sessionSize = getSessionSize();
   const cards = loadCards();
-  const entries = currentPool().map(([word, meaning]) => ({ word, meaning, progress: currentProgress(word, cards) }));
+  const entries = currentPool().map(([word, meaning, example, isCustom]) => ({ word, meaning, example, isCustom, progress: currentProgress(word, cards) }));
   const due = entries
     .filter(item => item.progress && item.progress.dueAt <= now)
     .sort((a, b) => a.progress.dueAt - b.progress.dueAt);
@@ -688,11 +812,14 @@ function selectSessionWords() {
     .filter(item => item.progress && item.progress.dueAt > now)
     .sort((a, b) => a.progress.dueAt - b.progress.dueAt);
 
-  const selected = due.slice(0, SESSION_SIZE);
+  const selected = due.slice(0, sessionSize);
   const newSlots = Math.max(0, NEW_WORDS_PER_DAY - reviewedNewWordsToday(selectedLang));
-  selected.push(...newWords.slice(0, Math.min(SESSION_SIZE - selected.length, newSlots)));
+  const personalNew = newWords.filter(item => item.isCustom);
+  selected.push(...personalNew.slice(0, Math.min(sessionSize - selected.length, newSlots)));
+  const remainingNewSlots = Math.max(0, Math.min(sessionSize - selected.length, newSlots - selected.filter(item => item.isCustom).length));
+  selected.push(...newWords.filter(item => !item.isCustom).slice(0, remainingNewSlots));
   // 復習も新規も残っていないときは、次に期限が来る語を自主練習として出す。
-  selected.push(...upcoming.slice(0, SESSION_SIZE - selected.length));
+  selected.push(...upcoming.slice(0, sessionSize - selected.length));
   return shuffle(selected).map(item => ({ ...item, isRetry: false, retryCount: 0 }));
 }
 function startSession() {
@@ -751,8 +878,8 @@ function advance(wasCorrect) {
 }
 function nextQuestion() {
   updateStatus();
-  const { word, meaning } = session.words[session.index];
-  if (selectedMode === "flashcard") renderFlashcard(word, meaning);
+  const { word, meaning, example } = session.words[session.index];
+  if (selectedMode === "flashcard") renderFlashcard(word, meaning, example);
   else if (selectedMode === "quiz") renderQuiz(word, meaning);
   else renderTyping(word, meaning);
 }
@@ -809,14 +936,30 @@ function launchConfetti() {
 
 // ===== フラッシュカード(タップでフリップ / スワイプで判定)=====
 const cardEl = document.getElementById("cardEl");
-function renderFlashcard(word, meaning) {
+function speakText(text) {
+  if (!text || typeof SpeechSynthesisUtterance === "undefined" || typeof speechSynthesis === "undefined") return;
+  speechSynthesis.cancel();
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = LANG_SPEECH[selectedLang] || "en-US";
+  utterance.rate = 0.85;
+  speechSynthesis.speak(utterance);
+}
+function speakCurrentWord() {
+  const item = session.words[session.index];
+  if (item) speakText(item.word);
+}
+document.getElementById("speakBtn").addEventListener("click", speakCurrentWord);
+function renderFlashcard(word, meaning, example) {
   cardEl.classList.remove("flipped", "fly-right", "fly-left");
   cardEl.style.transform = "";
   cardEl.removeAttribute("data-lean");
   const wordEl = document.getElementById("cardWord");
   const meaningEl = document.getElementById("cardMeaning");
+  const exampleEl = document.getElementById("cardExample");
   wordEl.textContent = word;
   meaningEl.textContent = meaning;
+  exampleEl.textContent = example || "";
+  exampleEl.classList.toggle("hidden", !example);
   fitFont(wordEl, word, WORD_SIZES);
   fitFont(meaningEl, meaning, MEANING_SIZES);
   meaningEl.scrollTop = 0;
