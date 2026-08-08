@@ -1,4 +1,4 @@
-const CACHE_NAME = "vocab-v3";
+const CACHE_NAME = "vocab-v4";
 const APP_SHELL = [
   "./",
   "./index.html",

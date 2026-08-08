@@ -386,7 +386,7 @@
     </div>
     <div class="panel personal-panel" style="margin-top: 16px;">
       <h2>My study / 自分専用</h2>
-      <div class="personal-note">自分が実際に使う単語を登録すると、通常の復習スケジュールに優先的に組み込まれます。</div>
+      <div class="personal-note">自分が実際に使う単語やイディオムを登録すると、通常の復習スケジュールに優先的に組み込まれます。</div>
       <div class="personal-form">
         <select id="dailyGoalSelect" aria-label="1回の学習語数">
           <option value="5">1回 5語（短時間）</option>
@@ -394,8 +394,12 @@
           <option value="15">1回 15語</option>
           <option value="20">1回 20語</option>
         </select>
+        <select id="customTypeSelect" aria-label="登録する種類">
+          <option value="word">単語</option>
+          <option value="idiom">イディオム・定型表現</option>
+        </select>
         <select id="customLangSelect" aria-label="登録する言語"></select>
-        <input id="customWordInput" type="text" placeholder="単語・フレーズ（例: take a break）" autocomplete="off">
+        <input id="customWordInput" type="text" placeholder="単語・表現（例: take a break）" autocomplete="off">
         <input id="customMeaningInput" type="text" placeholder="意味（例: 休憩する）" autocomplete="off">
         <input id="customExampleInput" type="text" placeholder="例文（任意）" autocomplete="off">
         <button id="addCustomWordBtn" class="primary">自分の単語を追加</button>
@@ -565,7 +569,7 @@ function renderCustomWords() {
   const list = document.getElementById("customWordsList");
   const words = loadCustomWords()[lang] || [];
   list.innerHTML = words.length
-    ? words.map((item, index) => `<div class="custom-item"><div class="custom-text"><strong>${escapeHTML(item.word)}</strong><small>${escapeHTML(item.meaning)}${item.example ? ` · ${escapeHTML(item.example)}` : ""}</small></div><button data-custom-index="${index}">削除</button></div>`).join("")
+    ? words.map((item, index) => `<div class="custom-item"><div class="custom-text"><strong>${item.kind === "idiom" ? "🔗 " : ""}${escapeHTML(item.word)}</strong><small>${item.kind === "idiom" ? "イディオム・定型表現 · " : ""}${escapeHTML(item.meaning)}${item.example ? ` · ${escapeHTML(item.example)}` : ""}</small></div><button data-custom-index="${index}">削除</button></div>`).join("")
     : `<div class="personal-note" style="margin:0;">まだ自分の単語はありません</div>`;
   list.querySelectorAll("[data-custom-index]").forEach(btn => btn.addEventListener("click", () => {
     const data = loadCustomWords();
@@ -578,6 +582,7 @@ function renderCustomWords() {
 }
 function addCustomWord() {
   const lang = document.getElementById("customLangSelect").value;
+  const kind = document.getElementById("customTypeSelect").value;
   const word = document.getElementById("customWordInput").value.trim();
   const meaning = document.getElementById("customMeaningInput").value.trim();
   const example = document.getElementById("customExampleInput").value.trim();
@@ -587,7 +592,7 @@ function addCustomWord() {
   if (list.some(item => item.word.normalize("NFC").toLowerCase() === word.normalize("NFC").toLowerCase())) {
     alert("その単語はすでに登録されています。"); return;
   }
-  list.unshift({ word, meaning, example, createdAt: Date.now() });
+  list.unshift({ word, meaning, example, kind, createdAt: Date.now() });
   data[lang] = list;
   saveCustomWords(data);
   document.getElementById("customWordInput").value = "";
