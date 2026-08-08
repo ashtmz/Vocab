@@ -506,6 +506,7 @@
 </div>
 
 <script src="words.js"></script>
+<script src="idioms.js"></script>
 <script>
 // 単語データは words.js(自動生成・頻度順)で定義される
 
@@ -524,7 +525,8 @@ const LEVELS = [
   { name: "初級", start: 0, end: 1000 },
   { name: "中級", start: 1000, end: 3000 },
   { name: "上級", start: 3000, end: 6000 },
-  { name: "最上級", start: 6000, end: 10000 }
+  { name: "最上級", start: 6000, end: 10000 },
+  { name: "イディオム", idioms: true }
 ];
 
 // ===== 状態 =====
@@ -535,10 +537,21 @@ let session = { words: [], index: 0, correct: 0, attempted: 0, initialTotal: 0, 
 
 // 選択中の言語・レベルに応じた出題範囲を返す
 function currentPool() {
-  const { start, end } = LEVELS[selectedLevel];
-  const base = WORDS[selectedLang].list.slice(start, end);
   const custom = loadCustomWords()[selectedLang] || [];
-  return base.concat(custom.map(item => [item.word, item.meaning, item.example || "", true]));
+  const level = LEVELS[selectedLevel];
+  if (level.idioms) {
+    const standard = (BUILTIN_IDIOMS[selectedLang] || [])
+      .map(([word, meaning, example]) => [word, meaning, example, false, "idiom"]);
+    const personal = custom
+      .filter(item => item.kind === "idiom")
+      .map(item => [item.word, item.meaning, item.example || "", true, "idiom"]);
+    return standard.concat(personal);
+  }
+  const base = WORDS[selectedLang].list.slice(level.start, level.end);
+  const personal = custom
+    .filter(item => item.kind !== "idiom")
+    .map(item => [item.word, item.meaning, item.example || "", true, "word"]);
+  return base.concat(personal);
 }
 
 function loadProfile() {
@@ -770,7 +783,7 @@ document.querySelectorAll("[data-mode]").forEach(btn => {
 const levelButtonsEl = document.getElementById("levelButtons");
 LEVELS.forEach((lv, i) => {
   const btn = document.createElement("button");
-  btn.textContent = `${lv.name} ${lv.start + 1}〜${lv.end}位`;
+  btn.textContent = lv.idioms ? `${lv.name}（標準データ）` : `${lv.name} ${lv.start + 1}〜${lv.end}位`;
   if (i === selectedLevel) btn.classList.add("selected");
   btn.addEventListener("click", () => {
     selectedLevel = i;
@@ -808,7 +821,7 @@ function selectSessionWords() {
   const now = Date.now();
   const sessionSize = getSessionSize();
   const cards = loadCards();
-  const entries = currentPool().map(([word, meaning, example, isCustom]) => ({ word, meaning, example, isCustom, progress: currentProgress(word, cards) }));
+  const entries = currentPool().map(([word, meaning, example, isCustom, kind]) => ({ word, meaning, example, isCustom, kind, progress: currentProgress(word, cards) }));
   const due = entries
     .filter(item => item.progress && item.progress.dueAt <= now)
     .sort((a, b) => a.progress.dueAt - b.progress.dueAt);
