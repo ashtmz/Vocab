@@ -640,6 +640,10 @@ let selectedLang = null;
 let selectedMode = null;
 let selectedLevel = 0;
 let selectedDirection = "toMeaning";
+// 端末の音声一覧は、読み込み中やアプリ復帰の直後に一時的に空で返ることがある。
+// そのまま使うと既定の声に切り替わってしまうため、最後に取れた一覧と選んだ声を保持する。
+let voiceListCache = [];
+const resolvedVoices = {};  // 言語ごとに最後に使った声
 let session = { words: [], index: 0, correct: 0, attempted: 0, initialTotal: 0, missed: new Set() };
 
 // 選択中の言語・レベルに応じた出題範囲を返す
@@ -1476,12 +1480,18 @@ const PREFERRED_VOICES = {
   de: ["Anna", "Petra", "Markus", "Viktor", "Helena"],
   it: ["Alice", "Federica", "Luca", "Paola"]
 };
+function allVoices() {
+  if (typeof speechSynthesis === "undefined") return voiceListCache;
+  const voices = speechSynthesis.getVoices();
+  if (voices.length) voiceListCache = voices;
+  return voiceListCache;
+}
 function availableVoices(lang) {
   if (typeof speechSynthesis === "undefined") return [];
   const target = LANG_SPEECH[lang] || "en-US";
   const code = voice => voice.lang.replace("_", "-");
   // 同じ言語の別地域(fr-CAなど)も選べるようにしつつ、学習対象の地域と聞き取りやすい声を先に並べる
-  return speechSynthesis.getVoices()
+  return allVoices()
     .filter(voice => code(voice).slice(0, 2) === target.slice(0, 2))
     .sort((a, b) => (code(b) === target) - (code(a) === target)
       || voiceRank(a, lang) - voiceRank(b, lang)
@@ -1494,12 +1504,7 @@ function voiceRank(voice, lang) {
   if (preferred >= 0) return 1 + preferred;
   return NOVELTY_VOICE.test(voice.name) ? 99 : 50;
 }
-function pickVoice(lang) {
-  const voices = availableVoices(lang);
-  if (!voices.length) return null;
-  const chosen = (loadProfile().voices || {})[lang];
-  const saved = chosen && voices.find(voice => voice.voiceURI === chosen);
-  if (saved) return saved;
+function autoVoice(voices, lang) {
   const highQuality = voices.find(voice => HQ_VOICE.test(voice.name));
   if (highQuality) return highQuality;
   for (const name of PREFERRED_VOICES[lang] || []) {
@@ -1507,6 +1512,17 @@ function pickVoice(lang) {
     if (match) return match;
   }
   return voices.find(voice => !NOVELTY_VOICE.test(voice.name)) || voices[0];
+}
+function pickVoice(lang) {
+  const voices = availableVoices(lang);
+  if (!voices.length) return resolvedVoices[lang] || null;
+  const chosen = (loadProfile().voices || {})[lang];
+  // 端末を更新すると同じ声でも識別子が変わることがあるため、名前でも照合する
+  const saved = chosen && (voices.find(voice => voice.voiceURI === chosen) || voices.find(voice => voice.name === chosen));
+  // 指定した声が一覧から見つからないときは、直前まで使っていた声を保つ
+  const voice = saved || (chosen && resolvedVoices[lang]) || autoVoice(voices, lang);
+  if (voice) resolvedVoices[lang] = voice;
+  return voice || null;
 }
 function speechRate() {
   const rate = Number(loadProfile().speechRate);
@@ -1521,7 +1537,9 @@ function speakText(text, lang) {
   if (voice) utterance.voice = voice;
   utterance.lang = (voice && voice.lang) || LANG_SPEECH[target] || "en-US";
   utterance.rate = speechRate();
-  speechSynthesis.speak(utterance);
+  // 読み上げ中に続けて話し始めると、端末によっては声の指定が無視されるので一拍おく
+  if (speechSynthesis.speaking || speechSynthesis.pending) setTimeout(() => speechSynthesis.speak(utterance), 60);
+  else speechSynthesis.speak(utterance);
 }
 function speakCurrentWord() {
   const item = session.words[session.index];
