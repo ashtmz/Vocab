@@ -335,6 +335,27 @@
   .custom-item .custom-text { flex: 1; min-width: 0; text-align: left; font-size: 0.86rem; line-height: 1.45; }
   .custom-item .custom-text small { display: block; color: var(--sub); }
   .custom-item button { min-height: 34px; padding: 5px 9px; font-size: 0.76rem; }
+
+  /* ===== 検索・逆引き ===== */
+  .search-form { display: grid; gap: 8px; }
+  .search-form input, .search-form select {
+    width: 100%; padding: 11px 12px; border-radius: 11px;
+    border: 1px solid var(--line); background: rgba(255, 255, 255, 0.05);
+    color: var(--text); font-size: 0.92rem; font-family: inherit;
+  }
+  .search-form input:focus, .search-form select:focus { outline: none; border-color: var(--accent); }
+  .search-form select option { background: #171b28; color: var(--text); }
+  .search-dir { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+  .search-dir button { min-height: 40px; padding: 7px 4px; font-size: 0.78rem; border-radius: 11px; }
+  .search-summary { color: var(--sub); font-size: 0.78rem; margin-top: 12px; }
+  .search-results { display: grid; gap: 7px; margin-top: 8px; max-height: 360px; overflow-y: auto; }
+  .search-item { display: flex; align-items: center; gap: 8px; padding: 9px 10px; border: 1px solid var(--line); border-radius: 11px; background: rgba(255, 255, 255, 0.035); }
+  .search-item .custom-text { flex: 1; min-width: 0; text-align: left; font-size: 0.86rem; line-height: 1.45; }
+  .search-item .custom-text small { display: block; color: var(--sub); }
+  .search-item .custom-text mark { background: rgba(139, 92, 246, 0.38); color: var(--text); border-radius: 3px; padding: 0 1px; }
+  .search-tag { flex: none; font-size: 0.68rem; color: var(--sub); border: 1px solid var(--line); border-radius: 999px; padding: 3px 8px; white-space: nowrap; }
+  .search-tag.partial { color: var(--accent2); border-color: rgba(34, 211, 238, 0.4); }
+  .search-item button { min-height: 34px; padding: 5px 9px; font-size: 0.86rem; flex: none; }
   .speak-btn { min-height: 38px; padding: 8px 14px; font-size: 0.84rem; }
   .word-example { color: #67e8f9; font-size: 0.88rem; line-height: 1.55; max-height: 80px; overflow-y: auto; }
 
@@ -374,11 +395,34 @@
       </div>
     </div>
     <div class="panel">
+      <h2>Direction / 出題の向き</h2>
+      <div class="btn-grid" id="directionButtons">
+        <button data-direction="toMeaning" class="selected">単語 → 意味</button>
+        <button data-direction="toWord">意味 → 単語</button>
+      </div>
+      <div class="personal-note" id="directionNote" style="margin: 10px 0 0;"></div>
+    </div>
+    <div class="panel">
       <h2>Level / レベル(頻出順)</h2>
       <div class="btn-grid" id="levelButtons"></div>
     </div>
     <div class="controls">
       <button class="primary" id="startBtn" disabled>学習を始める</button>
+    </div>
+    <div class="panel" style="margin-top: 16px;">
+      <h2>Search / 単語検索・逆引き</h2>
+      <div class="personal-note">単語から意味を調べたり、日本語の意味から単語を逆引きできます。逆引きは語の一部が合っていればヒットし、「ゆっくり 歩く」のように区切って探せます。頻出10,000語・イディオム・自分の単語すべてが対象です。</div>
+      <div class="search-form">
+        <select id="searchLangSelect" aria-label="検索する言語"></select>
+        <input id="searchInput" type="search" placeholder="単語 または 日本語の意味（例: apple / りんご）" autocomplete="off">
+        <div class="search-dir" id="searchDirButtons">
+          <button data-search-dir="auto" class="selected">自動</button>
+          <button data-search-dir="word">単語→意味</button>
+          <button data-search-dir="meaning">意味→単語</button>
+        </div>
+      </div>
+      <div id="searchSummary" class="search-summary"></div>
+      <div id="searchResults" class="search-results"></div>
     </div>
     <div class="panel study-plan" style="margin-top: 16px;">
       <h2>Today's plan / 今日の学習</h2>
@@ -410,8 +454,12 @@
       <h2>Stats / 学習記録</h2>
       <table class="stats-table" id="statsTable"></table>
       <div class="controls">
+        <button id="exportBtn">記録を書き出し</button>
+        <button id="importBtn">記録を読み込み</button>
         <button id="resetBtn">記録をリセット</button>
       </div>
+      <div class="personal-note" style="margin: 12px 0 0;">記録は端末内だけに保存されます。機種変更やブラウザのデータ削除に備えて、ときどき書き出しておくと安全です。</div>
+      <input id="importFile" type="file" accept="application/json,.json" class="hidden">
     </div>
   </div>
 
@@ -429,14 +477,14 @@
 
     <!-- フラッシュカード -->
     <div id="flashcardView" class="hidden">
-      <div class="swipe-labels"><span>← まだ ✕</span><span>タップで意味を表示</span><span>覚えた ○ →</span></div>
+      <div class="swipe-labels"><span>← まだ ✕</span><span id="swipeHint">タップで意味を表示</span><span>覚えた ○ →</span></div>
       <div class="card-stage">
         <div class="flashcard" id="cardEl">
           <div class="card-inner">
             <div class="card-face front">
               <span class="card-counter" id="cardCounter"></span>
               <div class="word" id="cardWord"></div>
-              <div class="hint">タップして意味を表示</div>
+              <div class="hint" id="cardHint">タップして意味を表示</div>
             </div>
             <div class="card-face back">
               <div class="meaning" id="cardMeaning"></div>
@@ -514,6 +562,7 @@ const MODE_NAMES = { flashcard: "フラッシュカード", quiz: "4択クイズ
 const LANG_FLAGS = { en: "🇺🇸", es: "🇪🇸", fr: "🇫🇷", de: "🇩🇪", it: "🇮🇹" };
 const SESSION_SIZE = 10; // 既定値。個人設定で変更可能
 const RECOMMENDED_NEW_PER_DAY = 10;
+const WEAK_LAPSES = 2;  // これ以上まちがえた語を「苦手」とみなす
 const DAY_MS = 24 * 60 * 60 * 1000;
 const STORAGE_KEY = "vocabAppStats";
 const CARD_STORAGE_KEY = "vocabAppCards";
@@ -526,19 +575,40 @@ const LEVELS = [
   { name: "中級", start: 1000, end: 3000 },
   { name: "上級", start: 3000, end: 6000 },
   { name: "最上級", start: 6000, end: 10000 },
-  { name: "イディオム", idioms: true }
+  { name: "イディオム", idioms: true },
+  { name: "苦手", weak: true }
 ];
+// 出題の向き。タイピングは日本語の採点ができないため常に toWord で出題する。
+const DIRECTIONS = { toMeaning: "単語 → 意味", toWord: "意味 → 単語" };
 
 // ===== 状態 =====
 let selectedLang = null;
 let selectedMode = null;
 let selectedLevel = 0;
+let selectedDirection = "toMeaning";
 let session = { words: [], index: 0, correct: 0, attempted: 0, initialTotal: 0, missed: new Set() };
 
 // 選択中の言語・レベルに応じた出題範囲を返す
+// 言語内のすべての出題候補(単語・イディオム・自分の単語)を同じ形でまとめる
+function allEntries(lang) {
+  const custom = loadCustomWords()[lang] || [];
+  const personal = custom.map(item => [item.word, item.meaning, item.example || "", true, item.kind === "idiom" ? "idiom" : "word"]);
+  const words = ((WORDS[lang] && WORDS[lang].list) || []).map(([word, meaning]) => [word, meaning, "", false, "word"]);
+  const idioms = (BUILTIN_IDIOMS[lang] || []).map(([word, meaning, example]) => [word, meaning, example || "", false, "idiom"]);
+  return personal.concat(words, idioms);
+}
 function currentPool() {
   const custom = loadCustomWords()[selectedLang] || [];
   const level = LEVELS[selectedLevel];
+  if (level.weak) {
+    // レベルをまたいで、まちがえた回数の多い語から集める
+    const cards = loadCards();
+    return allEntries(selectedLang)
+      .map(entry => ({ entry, card: cards[cardKey(selectedLang, entry[0])] }))
+      .filter(item => item.card && item.card.lapses >= WEAK_LAPSES)
+      .sort((a, b) => b.card.lapses - a.card.lapses)
+      .map(item => item.entry);
+  }
   if (level.idioms) {
     const standard = (BUILTIN_IDIOMS[selectedLang] || [])
       .map(([word, meaning, example]) => [word, meaning, example, false, "idiom"]);
@@ -591,6 +661,7 @@ function renderCustomWords() {
     saveCustomWords(data);
     renderCustomWords();
     renderStudyPlan();
+    runSearch();
   }));
 }
 function addCustomWord() {
@@ -613,6 +684,213 @@ function addCustomWord() {
   document.getElementById("customExampleInput").value = "";
   renderCustomWords();
   renderStudyPlan();
+  runSearch();
+}
+
+// ===== 単語検索・逆引き =====
+const SEARCH_LIMIT = 50;
+const WORD_PARTIAL_RATIO = 0.3;   // 単語: 検索語のこの割合以上が一致すれば部分一致とする
+const IDIOM_PARTIAL_RATIO = 0.5;  // イディオム: 複数語で1つの表現のため、単語より厳しくする
+const searchIndexCache = {};   // 言語ごとの検索用インデックス(標準データのみキャッシュ)
+let searchDirection = "auto";  // auto | word | meaning
+let searchTimer = null;
+let searchHits = [];
+
+// 大文字小文字とアクセント記号を無視する。ハイライト位置がずれないよう1文字=1文字で変換する。
+function normalizeSearch(value) {
+  let out = "";
+  for (const ch of String(value)) {
+    const lower = ch.toLowerCase();
+    const base = lower.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+    out += base.length === ch.length ? base : ch;
+  }
+  return out;
+}
+function searchEntry(word, meaning, example, kind, isCustom, rank) {
+  return {
+    word, meaning, example: example || "", kind, isCustom, rank,
+    nWord: normalizeSearch(word), nMeaning: normalizeSearch(meaning)
+  };
+}
+// 標準データはキャッシュし、自分の単語は毎回最新を先頭に連結する
+function searchIndex(lang) {
+  if (!searchIndexCache[lang]) {
+    const words = ((WORDS[lang] && WORDS[lang].list) || [])
+      .map(([word, meaning], i) => searchEntry(word, meaning, "", "word", false, i + 1));
+    const idioms = (BUILTIN_IDIOMS[lang] || [])
+      .map(([word, meaning, example]) => searchEntry(word, meaning, example, "idiom", false, null));
+    searchIndexCache[lang] = words.concat(idioms);
+  }
+  const custom = (loadCustomWords()[lang] || [])
+    .map(item => searchEntry(item.word, item.meaning, item.example, item.kind === "idiom" ? "idiom" : "word", true, null));
+  return custom.concat(searchIndexCache[lang]);
+}
+// 一致度: 0=完全一致 1=前方一致 2=区切りの直後 3=部分一致 / -1=不一致
+function matchScore(haystack, query) {
+  const at = haystack.indexOf(query);
+  if (at < 0) return -1;
+  if (haystack.length === query.length) return 0;
+  if (at === 0) return 1;
+  return /[\s,、,。・;；\/(（]/.test(haystack[at - 1]) ? 2 : 3;
+}
+// 日本語が含まれていれば「意味から逆引き」と判断する
+function detectSearchDirection(query) {
+  return /[ぁ-んァ-ヶー一-龠々〆]/.test(query) ? "meaning" : "word";
+}
+function searchTagLabel(entry) {
+  if (entry.isCustom) return entry.kind === "idiom" ? "自分のイディオム" : "自分の単語";
+  if (entry.kind === "idiom") return "イディオム";
+  const level = LEVELS.find(lv => !lv.idioms && entry.rank > lv.start && entry.rank <= lv.end);
+  return `${level ? level.name + " " : ""}${entry.rank}位`;
+}
+// 語の区切りとみなす記号と、語中・語尾で区切りに使う助詞
+const SPLIT_MARKS = /[\s,、,。・;；\/(（)）]+/;
+const PARTICLES = "とにをはがへでのやもなて";
+// 逆引き用: 検索語を語のまとまりに分ける(「ゆっくりと歩く」「ゆっくり 歩く」→ ゆっくり / 歩く)
+function queryTokens(query) {
+  const tokens = [];
+  for (const part of query.split(SPLIT_MARKS).filter(Boolean)) {
+    const pieces = part.split(new RegExp(`[${PARTICLES}]`)).filter(piece => piece.length >= 2);
+    // 2つ以上に分かれたときだけ分割を採用し、それ以外は語尾の助詞だけを落とす
+    const list = pieces.length >= 2 ? pieces : [stripTailParticles(part)];
+    for (const piece of list) if (piece && !tokens.includes(piece)) tokens.push(piece);
+  }
+  return tokens.length ? tokens : [query];
+}
+function stripTailParticles(token) {
+  const stripped = token.replace(new RegExp(`[${PARTICLES}た]+$`), "");
+  return stripped.length >= 2 ? stripped : token;
+}
+function totalLength(tokens) {
+  return tokens.reduce((sum, token) => sum + token.length, 0);
+}
+// 語義に実際に含まれる、その語の最長の連続部分を返す。かな1文字は助詞・活用語尾に
+// なりやすいので拾わず、それ単独で意味を持つ漢字1文字だけは例外として拾う。
+const KANJI_CHAR = /[一-龠々]/;
+function longestCommonPiece(text, token) {
+  if (token.length < 2) return text.includes(token) ? token : "";
+  let near = false;
+  for (let i = 0; i + 2 <= token.length; i++) if (text.includes(token.slice(i, i + 2))) { near = true; break; }
+  if (near) {
+    for (let len = Math.min(token.length, 12); len >= 2; len--) {
+      for (let i = 0; i + len <= token.length; i++) {
+        const piece = token.slice(i, i + len);
+        if (text.includes(piece)) return piece;
+      }
+    }
+  }
+  for (const ch of token) if (KANJI_CHAR.test(ch) && text.includes(ch)) return ch;
+  return "";
+}
+// 単語: 1つの概念を指すので、分割した語のどれかが含まれればヒット(一致した文字数で順位付け)
+function wordMeaningMatch(text, query, tokens) {
+  const direct = matchScore(text, query);
+  if (direct >= 0) return { score: direct, ratio: 1, terms: [query] };
+  const whole = totalLength(tokens);
+  const exact = tokens.filter(token => text.includes(token));
+  if (exact.length) return { score: 4, ratio: totalLength(exact) / whole, terms: exact };
+  const pieces = tokens.map(token => longestCommonPiece(text, token)).filter(Boolean);
+  if (!pieces.length) return null;
+  const ratio = totalLength(pieces) / whole;
+  return ratio >= WORD_PARTIAL_RATIO ? { score: 5, ratio, terms: pieces } : null;
+}
+// イディオム: 複数の語で1つの表現になるので、分割した語がすべて揃うものを上位にする
+function idiomMeaningMatch(text, query, tokens) {
+  const direct = matchScore(text, query);
+  if (direct >= 0) return { score: direct, ratio: 1, terms: [query] };
+  const exact = tokens.filter(token => text.includes(token));
+  if (exact.length === tokens.length) return { score: 4, ratio: 1, terms: exact };
+  const pieces = tokens.map(token => text.includes(token) ? token : longestCommonPiece(text, token)).filter(Boolean);
+  if (!pieces.length) return null;
+  const ratio = totalLength(pieces) / totalLength(tokens);
+  return ratio >= IDIOM_PARTIAL_RATIO ? { score: 5, ratio, terms: pieces } : null;
+}
+function meaningMatch(entry, query, tokens) {
+  return entry.kind === "idiom"
+    ? idiomMeaningMatch(entry.nMeaning, query, tokens)
+    : wordMeaningMatch(entry.nMeaning, query, tokens);
+}
+// 一致した部分をすべて塗り分ける
+function highlightTerms(text, normalizedText, terms) {
+  const marked = new Array(text.length).fill(false);
+  for (const term of terms) {
+    if (!term) continue;
+    let at = normalizedText.indexOf(term);
+    while (at >= 0) {
+      for (let i = at; i < at + term.length; i++) marked[i] = true;
+      at = normalizedText.indexOf(term, at + term.length);
+    }
+  }
+  let out = "", buffer = "", marking = false;
+  const flush = () => {
+    if (buffer) out += marking ? `<mark>${escapeHTML(buffer)}</mark>` : escapeHTML(buffer);
+    buffer = "";
+  };
+  for (let i = 0; i < text.length; i++) {
+    if (marked[i] !== marking) { flush(); marking = marked[i]; }
+    buffer += text[i];
+  }
+  flush();
+  return out;
+}
+function runSearch() {
+  const input = document.getElementById("searchInput");
+  if (!input) return;
+  const lang = document.getElementById("searchLangSelect").value;
+  const summaryEl = document.getElementById("searchSummary");
+  const resultsEl = document.getElementById("searchResults");
+  const raw = input.value.trim();
+  searchHits = [];
+  if (!raw) {
+    summaryEl.textContent = "単語または日本語の意味を入力すると検索できます。";
+    resultsEl.innerHTML = "";
+    return;
+  }
+  const direction = searchDirection === "auto" ? detectSearchDirection(raw) : searchDirection;
+  const query = normalizeSearch(raw);
+  const tokens = direction === "meaning" ? queryTokens(query) : [];
+  for (const entry of searchIndex(lang)) {
+    if (direction === "meaning") {
+      // 逆引きは語の一部が合っていればヒットさせる(単語とイディオムで法則を分ける)
+      const hit = meaningMatch(entry, query, tokens);
+      if (hit) searchHits.push({ entry, ...hit });
+    } else {
+      const score = matchScore(entry.nWord, query);
+      if (score >= 0) searchHits.push({ entry, score, ratio: 1, terms: [query] });
+    }
+  }
+  searchHits.sort((a, b) =>
+    a.score - b.score ||
+    b.ratio - a.ratio ||
+    // 部分一致は語義が長いほど偶然当たりやすいため、簡潔な語義を優先する
+    (a.score >= 4 ? a.entry.meaning.length - b.entry.meaning.length : 0) ||
+    (b.entry.isCustom ? 1 : 0) - (a.entry.isCustom ? 1 : 0) ||
+    (a.entry.rank || 99999) - (b.entry.rank || 99999));
+  const shown = searchHits.slice(0, SEARCH_LIMIT);
+  const label = direction === "meaning" ? "意味から逆引き" : "単語から検索";
+  const partialCount = searchHits.filter(hit => hit.score >= 4).length;
+  const exactCount = searchHits.length - partialCount;
+  const more = searchHits.length > SEARCH_LIMIT ? `（上位${SEARCH_LIMIT}件を表示）` : "";
+  summaryEl.textContent = !searchHits.length
+    ? `${label}: 一致する語はありません`
+    : partialCount
+      ? `${label}: そのまま含む ${exactCount}件 ・ 部分一致 ${partialCount}件${more}`
+      : `${label}: ${searchHits.length}件${more}`;
+  resultsEl.innerHTML = shown.map((hit, index) => {
+    const e = hit.entry;
+    const wordHTML = direction === "word" ? highlightTerms(e.word, e.nWord, hit.terms) : escapeHTML(e.word);
+    const meaningHTML = direction === "meaning" ? highlightTerms(e.meaning, e.nMeaning, hit.terms) : escapeHTML(e.meaning);
+    return `<div class="search-item"><div class="custom-text">` +
+      `<strong>${e.kind === "idiom" ? "🔗 " : ""}${wordHTML}</strong>` +
+      `<small>${meaningHTML}${e.example ? ` · ${escapeHTML(e.example)}` : ""}</small></div>` +
+      (hit.score >= 4 ? `<span class="search-tag partial">部分一致</span>` : "") +
+      `<span class="search-tag">${escapeHTML(searchTagLabel(e))}</span>` +
+      `<button data-search-speak="${index}" aria-label="発音を聞く">🔊</button></div>`;
+  }).join("");
+  resultsEl.querySelectorAll("[data-search-speak]").forEach(btn => btn.addEventListener("click", () => {
+    const hit = shown[Number(btn.dataset.searchSpeak)];
+    if (hit) speakText(hit.entry.word, lang);
+  }));
 }
 
 // ===== 文字数に応じたフォントサイズ調整(省略表示を防ぐ)=====
@@ -692,7 +970,7 @@ function renderStudyPlan() {
   const savedCards = loadCards();
   const cards = currentPool().map(([word]) => currentProgress(word, savedCards)).filter(Boolean);
   const due = cards.filter(c => c.dueAt <= now).length;
-  const weak = cards.filter(c => c.lapses >= 2).length;
+  const weak = cards.filter(c => c.lapses >= WEAK_LAPSES).length;
   const newLeft = Math.max(0, RECOMMENDED_NEW_PER_DAY - reviewedNewWordsToday(selectedLang));
   const goal = getSessionSize();
   el.innerHTML = due
@@ -725,6 +1003,56 @@ function renderStats() {
     : `<tr><td style="color: var(--sub);">まだ記録がありません</td></tr>`;
 }
 
+// ===== 記録の書き出し・読み込み =====
+const BACKUP_KEYS = [STORAGE_KEY, CARD_STORAGE_KEY, CUSTOM_WORDS_KEY, PROFILE_KEY];
+function exportRecords() {
+  const data = {};
+  for (const key of BACKUP_KEYS) {
+    const value = localStorage.getItem(key);
+    if (value !== null) data[key] = value;
+  }
+  if (!Object.keys(data).length) { alert("書き出せる記録がまだありません。"); return; }
+  const now = new Date();
+  const stamp = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+  const payload = { app: "vocab", version: 1, exportedAt: now.toISOString(), data };
+  const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" }));
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `vocab-backup-${stamp}.json`;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function importRecords(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let payload = null;
+    try { payload = JSON.parse(String(reader.result)); }
+    catch { alert("ファイルの中身を読み取れませんでした。書き出したJSONファイルを選んでください。"); return; }
+    if (!payload || payload.app !== "vocab" || !payload.data || typeof payload.data !== "object") {
+      alert("このアプリで書き出したファイルではないようです。"); return;
+    }
+    const keys = BACKUP_KEYS.filter(key => typeof payload.data[key] === "string");
+    if (!keys.length) { alert("取り込める記録が入っていません。"); return; }
+    // 今の記録を消してしまう操作なので、確認を2回行う
+    const when = payload.exportedAt ? new Date(payload.exportedAt).toLocaleString() : "日時不明";
+    if (!confirm(`${when} に書き出した記録を取り込みます。\n今の学習記録・自分の単語はすべて置き換わります。続けますか?`)) return;
+    if (!confirm("置き換えた記録は元に戻せません。本当に取り込みますか?")) return;
+    for (const key of keys) localStorage.setItem(key, payload.data[key]);
+    dailyGoalSelect.value = String(getSessionSize());
+    selectedDirection = loadProfile().direction === "toWord" ? "toWord" : "toMeaning";
+    renderDirection();
+    renderCustomWords();
+    renderStats();
+    renderStudyPlan();
+    runSearch();
+    alert("記録を取り込みました。");
+  };
+  reader.onerror = () => alert("ファイルを読み込めませんでした。");
+  reader.readAsText(file);
+}
+
 // ===== ユーティリティ =====
 function shuffle(arr) {
   const a = arr.slice();
@@ -751,6 +1079,8 @@ for (const key of Object.keys(WORDS)) {
     selectedLang = key;
     langButtonsEl.querySelectorAll("button").forEach(b => b.classList.toggle("selected", b === btn));
     document.getElementById("customLangSelect").value = key;
+    document.getElementById("searchLangSelect").value = key;
+    runSearch();
     updateStartBtn();
     renderStudyPlan();
     renderCustomWords();
@@ -765,6 +1095,26 @@ for (const key of Object.keys(WORDS)) {
   customLangSelect.appendChild(option);
 }
 customLangSelect.addEventListener("change", renderCustomWords);
+const searchLangSelect = document.getElementById("searchLangSelect");
+for (const key of Object.keys(WORDS)) {
+  const option = document.createElement("option");
+  option.value = key;
+  option.textContent = `${LANG_FLAGS[key] || "🌐"} ${WORDS[key].name}`;
+  searchLangSelect.appendChild(option);
+}
+searchLangSelect.addEventListener("change", runSearch);
+document.getElementById("searchInput").addEventListener("input", () => {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 120); // 1万語を走査するため入力を少しまとめる
+});
+document.querySelectorAll("[data-search-dir]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    searchDirection = btn.dataset.searchDir;
+    document.querySelectorAll("[data-search-dir]").forEach(b => b.classList.toggle("selected", b === btn));
+    runSearch();
+  });
+});
+runSearch();
 document.getElementById("addCustomWordBtn").addEventListener("click", addCustomWord);
 const dailyGoalSelect = document.getElementById("dailyGoalSelect");
 dailyGoalSelect.value = String(getSessionSize());
@@ -777,13 +1127,16 @@ document.querySelectorAll("[data-mode]").forEach(btn => {
   btn.addEventListener("click", () => {
     selectedMode = btn.dataset.mode;
     document.querySelectorAll("[data-mode]").forEach(b => b.classList.toggle("selected", b === btn));
+    renderDirection();
     updateStartBtn();
   });
 });
 const levelButtonsEl = document.getElementById("levelButtons");
 LEVELS.forEach((lv, i) => {
   const btn = document.createElement("button");
-  btn.textContent = lv.idioms ? `${lv.name}（標準データ）` : `${lv.name} ${lv.start + 1}〜${lv.end}位`;
+  btn.textContent = lv.idioms ? `${lv.name}（標準データ）`
+    : lv.weak ? `${lv.name}（まちがえた語）`
+    : `${lv.name} ${lv.start + 1}〜${lv.end}位`;
   if (i === selectedLevel) btn.classList.add("selected");
   btn.addEventListener("click", () => {
     selectedLevel = i;
@@ -795,6 +1148,40 @@ LEVELS.forEach((lv, i) => {
 function updateStartBtn() {
   document.getElementById("startBtn").disabled = !(selectedLang && selectedMode);
 }
+// 出題の向き(タイピングは「意味 → 単語」で固定)
+const directionButtonsEl = document.getElementById("directionButtons");
+function effectiveDirection() {
+  return selectedMode === "typing" ? "toWord" : selectedDirection;
+}
+function renderDirection() {
+  const locked = selectedMode === "typing";
+  const active = effectiveDirection();
+  directionButtonsEl.querySelectorAll("[data-direction]").forEach(btn => {
+    btn.disabled = locked;
+    btn.classList.toggle("selected", btn.dataset.direction === active);
+  });
+  document.getElementById("directionNote").textContent = locked
+    ? "タイピングは日本語の採点ができないため、「意味 → 単語」に固定されます。"
+    : active === "toWord"
+      ? "日本語の意味を見て、単語を思い出す練習です。"
+      : "単語を見て、意味を思い出す練習です。";
+}
+directionButtonsEl.querySelectorAll("[data-direction]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    selectedDirection = btn.dataset.direction;
+    saveProfile({ ...loadProfile(), direction: selectedDirection });
+    renderDirection();
+  });
+});
+selectedDirection = loadProfile().direction === "toWord" ? "toWord" : "toMeaning";
+renderDirection();
+document.getElementById("exportBtn").addEventListener("click", exportRecords);
+document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
+document.getElementById("importFile").addEventListener("change", (e) => {
+  const file = e.target.files && e.target.files[0];
+  e.target.value = "";  // 同じファイルを続けて選べるようにする
+  if (file) importRecords(file);
+});
 document.getElementById("startBtn").addEventListener("click", startSession);
 document.getElementById("resetBtn").addEventListener("click", () => {
   if (confirm("学習記録をすべて削除します。よろしいですか?")) {
@@ -844,6 +1231,12 @@ function selectSessionWords() {
 }
 function startSession() {
   const words = selectSessionWords();
+  if (!words.length) {
+    alert(LEVELS[selectedLevel].weak
+      ? `苦手な語はまだありません。${WEAK_LAPSES}回以上まちがえた語がここに集まります。`
+      : "このレベルには出題できる語がありません。ほかのレベルを選んでください。");
+    return;
+  }
   session = {
     words,
     index: 0,
@@ -956,11 +1349,11 @@ function launchConfetti() {
 
 // ===== フラッシュカード(タップでフリップ / スワイプで判定)=====
 const cardEl = document.getElementById("cardEl");
-function speakText(text) {
+function speakText(text, lang) {
   if (!text || typeof SpeechSynthesisUtterance === "undefined" || typeof speechSynthesis === "undefined") return;
   speechSynthesis.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = LANG_SPEECH[selectedLang] || "en-US";
+  utterance.lang = LANG_SPEECH[lang || selectedLang] || "en-US";
   utterance.rate = 0.85;
   speechSynthesis.speak(utterance);
 }
@@ -976,12 +1369,17 @@ function renderFlashcard(word, meaning, example) {
   const wordEl = document.getElementById("cardWord");
   const meaningEl = document.getElementById("cardMeaning");
   const exampleEl = document.getElementById("cardExample");
-  wordEl.textContent = word;
-  meaningEl.textContent = meaning;
+  const toWord = effectiveDirection() === "toWord";
+  const front = toWord ? meaning : word;
+  const back = toWord ? word : meaning;
+  wordEl.textContent = front;
+  meaningEl.textContent = back;
   exampleEl.textContent = example || "";
   exampleEl.classList.toggle("hidden", !example);
-  fitFont(wordEl, word, WORD_SIZES);
-  fitFont(meaningEl, meaning, MEANING_SIZES);
+  fitFont(wordEl, front, toWord ? MEANING_SIZES : WORD_SIZES);
+  fitFont(meaningEl, back, toWord ? WORD_SIZES : MEANING_SIZES);
+  document.getElementById("cardHint").textContent = toWord ? "タップして単語を表示" : "タップして意味を表示";
+  document.getElementById("swipeHint").textContent = toWord ? "タップで単語を表示" : "タップで意味を表示";
   meaningEl.scrollTop = 0;
   document.getElementById("cardCounter").textContent = `${session.index + 1}/${session.words.length}`;
   // 登場アニメーション
@@ -1028,24 +1426,33 @@ document.getElementById("knowBtn").addEventListener("click", () => swipeOut("rig
 document.getElementById("dontKnowBtn").addEventListener("click", () => swipeOut("left"));
 
 // ===== 4択クイズ =====
+// 苦手モードなど候補が少ないときは、同じ言語の頻出語から誤答を補う
+function quizChoicePool() {
+  const pool = currentPool();
+  return pool.length >= 8 ? pool : pool.concat(WORDS[selectedLang].list.slice(0, 1000));
+}
 function renderQuiz(word, meaning) {
+  const toWord = effectiveDirection() === "toWord";
+  const question = toWord ? meaning : word;
+  const answer = toWord ? word : meaning;
   const quizWord = document.getElementById("quizWord");
-  quizWord.textContent = word;
-  fitFont(quizWord, word, QUIZ_SIZES);
+  quizWord.textContent = question;
+  fitFont(quizWord, question, QUIZ_SIZES);
   replayAnim(quizWord, "pop");
   hide("quizNextBtn");
-  const others = shuffle(currentPool().filter(([w, m]) => w !== word && m !== meaning)).slice(0, 3);
+  const others = shuffle(quizChoicePool().filter(([w, m]) => w !== word && m !== meaning)).slice(0, 3);
   const choices = shuffle([[word, meaning], ...others]);
   const container = document.getElementById("quizChoices");
   container.innerHTML = "";
-  choices.forEach(([, m]) => {
+  choices.forEach(([w, m]) => {
+    const label = toWord ? w : m;
     const btn = document.createElement("button");
-    btn.textContent = m;
+    btn.textContent = label;
     btn.addEventListener("click", () => {
-      const isCorrect = m === meaning;
+      const isCorrect = label === answer;
       container.querySelectorAll("button").forEach(b => {
         b.disabled = true;
-        if (b.textContent === meaning) b.classList.add("correct");
+        if (b.textContent === answer) b.classList.add("correct");
         else if (b === btn && !isCorrect) b.classList.add("wrong");
       });
       show("quizNextBtn");
