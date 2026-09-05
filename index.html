@@ -451,6 +451,19 @@
         <h2>Today's plan / 今日の学習</h2>
         <div id="studyPlan"></div>
       </div>
+      <div class="panel">
+        <h2>Voice / 音声</h2>
+        <div class="personal-note">端末に入っている音声で読み上げます。はっきり聞こえない場合は、端末に高品質な声を追加してください。<br>iPhone・iPad：設定 → アクセシビリティ → 読み上げコンテンツ → 声 → 英語 →「拡張」または「Premium」<br>Mac：システム設定 → アクセシビリティ → 読み上げコンテンツ → システムの声 →「声を管理」</div>
+        <div class="personal-form">
+          <select id="voiceSelect" aria-label="読み上げる音声"></select>
+          <select id="rateSelect" aria-label="読み上げ速度">
+            <option value="0.7">ゆっくり（0.7倍）</option>
+            <option value="0.85">やや遅い（0.85倍）</option>
+            <option value="1">標準（1.0倍）</option>
+          </select>
+          <button id="voiceTestBtn">この声で試聴</button>
+        </div>
+      </div>
     </div>
 
     <!-- 辞書タブ -->
@@ -1088,6 +1101,8 @@ function importRecords(file) {
     renderStats();
     renderStudyPlan();
     runSearch();
+    rateSelect.value = String(speechRate());
+    renderVoiceOptions();
     switchTab(currentTab);
     alert("記録を取り込みました。");
   };
@@ -1136,6 +1151,7 @@ for (const key of Object.keys(WORDS)) {
     document.getElementById("customLangSelect").value = key;
     document.getElementById("searchLangSelect").value = key;
     runSearch();
+    renderVoiceOptions();
     updateStartBtn();
     renderStudyPlan();
     renderCustomWords();
@@ -1230,6 +1246,51 @@ directionButtonsEl.querySelectorAll("[data-direction]").forEach(btn => {
 });
 selectedDirection = loadProfile().direction === "toWord" ? "toWord" : "toMeaning";
 renderDirection();
+// 音声の選択(端末の音声一覧は遅れて届くことがあるため、届いたら並べ直す)
+const voiceSelect = document.getElementById("voiceSelect");
+const rateSelect = document.getElementById("rateSelect");
+const VOICE_SAMPLES = { en: "Good morning. How are you today?", es: "Buenos días.", fr: "Bonjour.", de: "Guten Morgen.", it: "Buongiorno." };
+function voiceLang() {
+  return selectedLang || Object.keys(WORDS)[0];
+}
+function renderVoiceOptions() {
+  const lang = voiceLang();
+  const voices = availableVoices(lang);
+  if (!voices.length) {
+    voiceSelect.innerHTML = `<option value="">この端末には読み上げ音声がありません</option>`;
+    voiceSelect.disabled = true;
+    return;
+  }
+  const saved = (loadProfile().voices || {})[lang] || "";
+  const auto = pickVoice(lang);
+  voiceSelect.disabled = false;
+  voiceSelect.innerHTML = `<option value="">自動（おすすめ：${escapeHTML(auto ? auto.name : "なし")}）</option>` +
+    voices.map(voice => `<option value="${escapeHTML(voice.voiceURI)}">${escapeHTML(voice.name)}（${escapeHTML(voice.lang)}）</option>`).join("");
+  voiceSelect.value = voices.some(voice => voice.voiceURI === saved) ? saved : "";
+}
+function speakVoiceSample() {
+  const lang = voiceLang();
+  speakText(VOICE_SAMPLES[lang] || "Hello", lang);
+}
+voiceSelect.addEventListener("change", () => {
+  const profile = loadProfile();
+  const voices = { ...(profile.voices || {}) };
+  if (voiceSelect.value) voices[voiceLang()] = voiceSelect.value;
+  else delete voices[voiceLang()];
+  saveProfile({ ...profile, voices });
+  renderVoiceOptions();
+  speakVoiceSample();
+});
+rateSelect.value = String(speechRate());
+rateSelect.addEventListener("change", () => {
+  saveProfile({ ...loadProfile(), speechRate: Number(rateSelect.value) });
+  speakVoiceSample();
+});
+document.getElementById("voiceTestBtn").addEventListener("click", speakVoiceSample);
+if (typeof speechSynthesis !== "undefined") {
+  speechSynthesis.addEventListener("voiceschanged", renderVoiceOptions);
+}
+renderVoiceOptions();
 document.getElementById("exportBtn").addEventListener("click", exportRecords);
 document.getElementById("importBtn").addEventListener("click", () => document.getElementById("importFile").click());
 document.getElementById("importFile").addEventListener("change", (e) => {
@@ -1404,12 +1465,62 @@ function launchConfetti() {
 
 // ===== フラッシュカード(タップでフリップ / スワイプで判定)=====
 const cardEl = document.getElementById("cardEl");
+// 端末に入っている音声から、聞き取りやすいものを選ぶ。
+// 高品質版(拡張/Premium/Neural)→言語ごとの標準の声→効果音のような声を除いたもの、の順。
+const HQ_VOICE = /enhanced|premium|neural|natural|siri|google|拡張|高品質/i;
+const NOVELTY_VOICE = /bad news|good news|bahh|boing|bubbles|cellos|jester|organ|superstar|trinoids|whisper|wobble|zarvox|albert|fred|junior|kathy|ralph|deranged|hysterical|bells|ささやき|オルガン|スーパースター|トリノイド|ベル|道化|震え|風船|うわさ|ゼルダ/i;
+const PREFERRED_VOICES = {
+  en: ["Ava", "Samantha", "Alex", "Allison", "Susan", "Joelle", "Nicky", "Tom", "Daniel", "Serena", "Karen"],
+  es: ["Mónica", "Monica", "Paulina", "Marisol", "Jorge"],
+  fr: ["Thomas", "Amélie", "Audrey", "Aurélie", "Marie"],
+  de: ["Anna", "Petra", "Markus", "Viktor", "Helena"],
+  it: ["Alice", "Federica", "Luca", "Paola"]
+};
+function availableVoices(lang) {
+  if (typeof speechSynthesis === "undefined") return [];
+  const target = LANG_SPEECH[lang] || "en-US";
+  const code = voice => voice.lang.replace("_", "-");
+  // 同じ言語の別地域(fr-CAなど)も選べるようにしつつ、学習対象の地域と聞き取りやすい声を先に並べる
+  return speechSynthesis.getVoices()
+    .filter(voice => code(voice).slice(0, 2) === target.slice(0, 2))
+    .sort((a, b) => (code(b) === target) - (code(a) === target)
+      || voiceRank(a, lang) - voiceRank(b, lang)
+      || a.name.localeCompare(b.name));
+}
+// 小さいほど聞き取りやすい想定の並び順(0=高品質版, 1〜=標準の声, 50=その他, 99=効果音のような声)
+function voiceRank(voice, lang) {
+  if (HQ_VOICE.test(voice.name)) return 0;
+  const preferred = (PREFERRED_VOICES[lang] || []).findIndex(name => voice.name.startsWith(name));
+  if (preferred >= 0) return 1 + preferred;
+  return NOVELTY_VOICE.test(voice.name) ? 99 : 50;
+}
+function pickVoice(lang) {
+  const voices = availableVoices(lang);
+  if (!voices.length) return null;
+  const chosen = (loadProfile().voices || {})[lang];
+  const saved = chosen && voices.find(voice => voice.voiceURI === chosen);
+  if (saved) return saved;
+  const highQuality = voices.find(voice => HQ_VOICE.test(voice.name));
+  if (highQuality) return highQuality;
+  for (const name of PREFERRED_VOICES[lang] || []) {
+    const match = voices.find(voice => voice.name.startsWith(name));
+    if (match) return match;
+  }
+  return voices.find(voice => !NOVELTY_VOICE.test(voice.name)) || voices[0];
+}
+function speechRate() {
+  const rate = Number(loadProfile().speechRate);
+  return [0.7, 0.85, 1].includes(rate) ? rate : 0.85;
+}
 function speakText(text, lang) {
   if (!text || typeof SpeechSynthesisUtterance === "undefined" || typeof speechSynthesis === "undefined") return;
   speechSynthesis.cancel();
+  const target = lang || selectedLang;
   const utterance = new SpeechSynthesisUtterance(text);
-  utterance.lang = LANG_SPEECH[lang || selectedLang] || "en-US";
-  utterance.rate = 0.85;
+  const voice = pickVoice(target);
+  if (voice) utterance.voice = voice;
+  utterance.lang = (voice && voice.lang) || LANG_SPEECH[target] || "en-US";
+  utterance.rate = speechRate();
   speechSynthesis.speak(utterance);
 }
 function speakCurrentWord() {
