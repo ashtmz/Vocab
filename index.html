@@ -366,6 +366,29 @@
     transition: color 0.15s;
   }
   .back-link:hover { color: var(--text); }
+  /* ===== ホームのタブ ===== */
+  .tabs {
+    position: sticky; top: 8px; z-index: 5;
+    display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px;
+    padding: 6px; margin-bottom: 16px;
+    border: 1px solid var(--line); border-radius: 18px;
+    background: rgba(12, 15, 24, 0.86);
+    backdrop-filter: blur(18px); -webkit-backdrop-filter: blur(18px);
+  }
+  .tabs button {
+    min-height: 46px; padding: 6px 4px; border-radius: 13px;
+    border-color: transparent; background: transparent;
+    font-size: 0.8rem; font-weight: 700; color: var(--sub);
+  }
+  .tabs button .tab-icon { display: block; font-size: 1.05rem; margin-bottom: 2px; }
+  .tabs button.selected {
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.92), rgba(34, 211, 238, 0.82));
+    color: #0b0d14; box-shadow: var(--glow);
+  }
+  .sub-label {
+    font-size: 0.7rem; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--sub); font-weight: 700; margin: 18px 0 10px;
+  }
   .hidden { display: none !important; }
 
   @media (max-width: 400px) {
@@ -382,84 +405,102 @@
 
   <!-- ホーム画面 -->
   <div id="home" class="screen">
-    <div class="panel">
-      <h2>Language / 言語</h2>
-      <div class="btn-grid" id="langButtons"></div>
+    <div class="tabs" id="homeTabs">
+      <button data-tab-btn="study" class="selected"><span class="tab-icon">🎯</span>学習</button>
+      <button data-tab-btn="dict"><span class="tab-icon">🔍</span>辞書</button>
+      <button data-tab-btn="stats"><span class="tab-icon">📊</span>記録</button>
     </div>
-    <div class="panel">
-      <h2>Mode / 学習モード</h2>
-      <div class="btn-grid" id="modeButtons">
-        <button data-mode="flashcard"><span class="flag">🃏</span>フラッシュカード</button>
-        <button data-mode="quiz"><span class="flag">📝</span>4択クイズ</button>
-        <button data-mode="typing"><span class="flag">⌨️</span>タイピング</button>
+
+    <!-- 学習タブ -->
+    <div class="tab-panel" data-tab="study">
+      <div class="panel">
+        <h2>Language / 言語</h2>
+        <div class="btn-grid" id="langButtons"></div>
       </div>
-    </div>
-    <div class="panel">
-      <h2>Direction / 出題の向き</h2>
-      <div class="btn-grid" id="directionButtons">
-        <button data-direction="toMeaning" class="selected">単語 → 意味</button>
-        <button data-direction="toWord">意味 → 単語</button>
+      <div class="panel">
+        <h2>Mode / 学習モード</h2>
+        <div class="btn-grid" id="modeButtons">
+          <button data-mode="flashcard"><span class="flag">🃏</span>フラッシュカード</button>
+          <button data-mode="quiz"><span class="flag">📝</span>4択クイズ</button>
+          <button data-mode="typing"><span class="flag">⌨️</span>タイピング</button>
+        </div>
+        <div class="sub-label">出題の向き</div>
+        <div class="btn-grid" id="directionButtons">
+          <button data-direction="toMeaning" class="selected">単語 → 意味</button>
+          <button data-direction="toWord">意味 → 単語</button>
+        </div>
+        <div class="personal-note" id="directionNote" style="margin: 10px 0 0;"></div>
       </div>
-      <div class="personal-note" id="directionNote" style="margin: 10px 0 0;"></div>
-    </div>
-    <div class="panel">
-      <h2>Level / レベル(頻出順)</h2>
-      <div class="btn-grid" id="levelButtons"></div>
-    </div>
-    <div class="controls">
-      <button class="primary" id="startBtn" disabled>学習を始める</button>
-    </div>
-    <div class="panel" style="margin-top: 16px;">
-      <h2>Search / 単語検索・逆引き</h2>
-      <div class="personal-note">単語から意味を調べたり、日本語の意味から単語を逆引きできます。逆引きは語の一部が合っていればヒットし、「ゆっくり 歩く」のように区切って探せます。頻出10,000語・イディオム・自分の単語すべてが対象です。</div>
-      <div class="search-form">
-        <select id="searchLangSelect" aria-label="検索する言語"></select>
-        <input id="searchInput" type="search" placeholder="単語 または 日本語の意味（例: apple / りんご）" autocomplete="off">
-        <div class="search-dir" id="searchDirButtons">
-          <button data-search-dir="auto" class="selected">自動</button>
-          <button data-search-dir="word">単語→意味</button>
-          <button data-search-dir="meaning">意味→単語</button>
+      <div class="panel">
+        <h2>Level / レベル(頻出順)</h2>
+        <div class="btn-grid" id="levelButtons"></div>
+        <div class="sub-label">1回の学習語数</div>
+        <div class="personal-form">
+          <select id="dailyGoalSelect" aria-label="1回の学習語数">
+            <option value="5">1回 5語（短時間）</option>
+            <option value="10" selected>1回 10語（標準）</option>
+            <option value="15">1回 15語</option>
+            <option value="20">1回 20語</option>
+          </select>
         </div>
       </div>
-      <div id="searchSummary" class="search-summary"></div>
-      <div id="searchResults" class="search-results"></div>
-    </div>
-    <div class="panel study-plan" style="margin-top: 16px;">
-      <h2>Today's plan / 今日の学習</h2>
-      <div id="studyPlan"></div>
-    </div>
-    <div class="panel personal-panel" style="margin-top: 16px;">
-      <h2>My study / 自分専用</h2>
-      <div class="personal-note">自分が実際に使う単語やイディオムを登録すると、通常の復習スケジュールに優先的に組み込まれます。</div>
-      <div class="personal-form">
-        <select id="dailyGoalSelect" aria-label="1回の学習語数">
-          <option value="5">1回 5語（短時間）</option>
-          <option value="10" selected>1回 10語（標準）</option>
-          <option value="15">1回 15語</option>
-          <option value="20">1回 20語</option>
-        </select>
-        <select id="customTypeSelect" aria-label="登録する種類">
-          <option value="word">単語</option>
-          <option value="idiom">イディオム・定型表現</option>
-        </select>
-        <select id="customLangSelect" aria-label="登録する言語"></select>
-        <input id="customWordInput" type="text" placeholder="単語・表現（例: take a break）" autocomplete="off">
-        <input id="customMeaningInput" type="text" placeholder="意味（例: 休憩する）" autocomplete="off">
-        <input id="customExampleInput" type="text" placeholder="例文（任意）" autocomplete="off">
-        <button id="addCustomWordBtn" class="primary">自分の単語を追加</button>
+      <div class="controls" style="margin-bottom: 16px;">
+        <button class="primary" id="startBtn" disabled>学習を始める</button>
       </div>
-      <div id="customWordsList" class="custom-list"></div>
-    </div>
-    <div class="panel" style="margin-top: 16px;">
-      <h2>Stats / 学習記録</h2>
-      <table class="stats-table" id="statsTable"></table>
-      <div class="controls">
-        <button id="exportBtn">記録を書き出し</button>
-        <button id="importBtn">記録を読み込み</button>
-        <button id="resetBtn">記録をリセット</button>
+      <div class="panel study-plan">
+        <h2>Today's plan / 今日の学習</h2>
+        <div id="studyPlan"></div>
       </div>
-      <div class="personal-note" style="margin: 12px 0 0;">記録は端末内だけに保存されます。機種変更やブラウザのデータ削除に備えて、ときどき書き出しておくと安全です。</div>
-      <input id="importFile" type="file" accept="application/json,.json" class="hidden">
+    </div>
+
+    <!-- 辞書タブ -->
+    <div class="tab-panel hidden" data-tab="dict">
+      <div class="panel">
+        <h2>Search / 単語検索・逆引き</h2>
+        <div class="personal-note">単語から意味を調べたり、日本語の意味から単語を逆引きできます。逆引きは語の一部が合っていればヒットし、「ゆっくり 歩く」のように区切って探せます。頻出10,000語・イディオム・自分の単語すべてが対象です。</div>
+        <div class="search-form">
+          <select id="searchLangSelect" aria-label="検索する言語"></select>
+          <input id="searchInput" type="search" placeholder="単語 または 日本語の意味（例: apple / りんご）" autocomplete="off">
+          <div class="search-dir" id="searchDirButtons">
+            <button data-search-dir="auto" class="selected">自動</button>
+            <button data-search-dir="word">単語→意味</button>
+            <button data-search-dir="meaning">意味→単語</button>
+          </div>
+        </div>
+        <div id="searchSummary" class="search-summary"></div>
+        <div id="searchResults" class="search-results"></div>
+      </div>
+      <div class="panel personal-panel">
+        <h2>My study / 自分専用</h2>
+        <div class="personal-note">自分が実際に使う単語やイディオムを登録すると、通常の復習スケジュールに優先的に組み込まれます。</div>
+        <div class="personal-form">
+          <select id="customTypeSelect" aria-label="登録する種類">
+            <option value="word">単語</option>
+            <option value="idiom">イディオム・定型表現</option>
+          </select>
+          <select id="customLangSelect" aria-label="登録する言語"></select>
+          <input id="customWordInput" type="text" placeholder="単語・表現（例: take a break）" autocomplete="off">
+          <input id="customMeaningInput" type="text" placeholder="意味（例: 休憩する）" autocomplete="off">
+          <input id="customExampleInput" type="text" placeholder="例文（任意）" autocomplete="off">
+          <button id="addCustomWordBtn" class="primary">自分の単語を追加</button>
+        </div>
+        <div id="customWordsList" class="custom-list"></div>
+      </div>
+    </div>
+
+    <!-- 記録タブ -->
+    <div class="tab-panel hidden" data-tab="stats">
+      <div class="panel">
+        <h2>Stats / 学習記録</h2>
+        <table class="stats-table" id="statsTable"></table>
+        <div class="controls">
+          <button id="exportBtn">記録を書き出し</button>
+          <button id="importBtn">記録を読み込み</button>
+          <button id="resetBtn">記録をリセット</button>
+        </div>
+        <div class="personal-note" style="margin: 12px 0 0;">記録は端末内だけに保存されます。機種変更やブラウザのデータ削除に備えて、ときどき書き出しておくと安全です。</div>
+        <input id="importFile" type="file" accept="application/json,.json" class="hidden">
+      </div>
     </div>
   </div>
 
@@ -1047,6 +1088,7 @@ function importRecords(file) {
     renderStats();
     renderStudyPlan();
     runSearch();
+    switchTab(currentTab);
     alert("記録を取り込みました。");
   };
   reader.onerror = () => alert("ファイルを読み込めませんでした。");
@@ -1071,6 +1113,19 @@ function replayAnim(el, cls) {
 }
 
 // ===== ホーム画面のセットアップ =====
+// ホームのタブ(学習・辞書・記録)。選んだタブは次回も開いた状態にする。
+const HOME_TABS = ["study", "dict", "stats"];
+let currentTab = "study";
+function switchTab(name) {
+  currentTab = HOME_TABS.includes(name) ? name : "study";
+  document.querySelectorAll("[data-tab]").forEach(el => el.classList.toggle("hidden", el.dataset.tab !== currentTab));
+  document.querySelectorAll("[data-tab-btn]").forEach(btn => btn.classList.toggle("selected", btn.dataset.tabBtn === currentTab));
+  saveProfile({ ...loadProfile(), tab: currentTab });
+  window.scrollTo(0, 0);
+}
+document.querySelectorAll("[data-tab-btn]").forEach(btn => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tabBtn));
+});
 const langButtonsEl = document.getElementById("langButtons");
 for (const key of Object.keys(WORDS)) {
   const btn = document.createElement("button");
@@ -1508,6 +1563,7 @@ document.getElementById("typingInput").addEventListener("keydown", (e) => {
 // 初期表示
 renderStats();
 renderStudyPlan();
+switchTab(loadProfile().tab);
 
 // PWA: 一度開いた単語データと画面を端末に保存し、オフラインでも利用できるようにする。
 if ("serviceWorker" in navigator && location.protocol.startsWith("http")) {
